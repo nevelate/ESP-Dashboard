@@ -1,6 +1,7 @@
 #define SH110X_NO_SPLASH
 
 #include <Arduino.h>
+#include <EncButton.h>
 #include <Bme280.h>
 #include <WiFi.h>
 #include <time.h>
@@ -13,11 +14,20 @@
 #include "StringHelpers.h"
 #include "constants.h"
 
+#define DASHBOARD_DELAY 15000
+#define BRIGHTNESS_DELAY 50
+#define BRIGHTNESS_STEP 16
+
 Bme280TwoWire sensor;
 Adafruit_SH1106G display = Adafruit_SH1106G(128, 64, &Wire);
+Button btnUp(10, INPUT_PULLDOWN, HIGH);
+Button btnDown(8, INPUT_PULLDOWN, HIGH);
 
 int temperature, pressure, humidity, year;
 String currentTime, currentDate;
+
+int8_t mode = 1;
+int brightness = 255;
 
 bool isWiFiDisabled = false;
 
@@ -38,28 +48,53 @@ void setup() {
 }
 
 void loop() {
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo)) {
-    if (!isWiFiDisabled) {
-      WiFi.disconnect(true);
-      isWiFiDisabled = true;
-    }
+  btnUp.tick();
+  btnDown.tick();
 
-    currentTime = pad2(timeinfo.tm_hour) + ":" + pad2(timeinfo.tm_min);
-    currentDate = pad2(timeinfo.tm_mday) + " " + month(timeinfo.tm_mon);
-    year = timeinfo.tm_year + 1900;
+  switch (mode) {
+    case 0:
+      brightnessControl();
+      break;
+    case 1:
+      dashboard();
+      break;
+    case 2:
+      toDoList();
+      break;
   }
-
-  temperature = int(sensor.getTemperature());
-  pressure = int(sensor.getPressure() / 133.3f);
-  humidity = int(sensor.getHumidity());
-
-  show();
-
-  delay(5000);
 }
 
-void show() {
+void dashboard() {
+  if (btnUp.hold()) mode = 2;
+  else if (btnDown.hold()) mode = 0;
+
+  static uint32_t tmr;
+
+  if (millis() - tmr >= DASHBOARD_DELAY) {
+    tmr = millis();
+
+    struct tm timeinfo;
+    if (getLocalTime(&timeinfo)) {
+      if (!isWiFiDisabled) {
+        WiFi.disconnect(true);
+        isWiFiDisabled = true;
+      }
+
+      currentTime = pad2(timeinfo.tm_hour) + ":" + pad2(timeinfo.tm_min);
+      currentDate = pad2(timeinfo.tm_mday) + " " + month(timeinfo.tm_mon);
+      year = timeinfo.tm_year + 1900;
+    }
+
+    temperature = int(sensor.getTemperature());
+    pressure = int(sensor.getPressure() / 133.3f);
+    humidity = int(sensor.getHumidity());
+
+    showDashboard();
+  }
+}
+
+void showDashboard() {
+
   display.clearDisplay();
 
   display.drawRect(0, 0, 128, 64, 1);
@@ -114,6 +149,50 @@ void show() {
   display.drawBitmap(83, 5, paws_bits, 39, 10, 1);
 
   display.display();
+}''
+
+void brightnessControl() {
+  if (btnUp.hold()) mode = 2;
+  else if (btnDown.hold()) mode = 1;
+
+  if (btnUp.click()) brightness += BRIGHTNESS_STEP;
+  else if (btnDown.click()) brightness -= BRIGHTNESS_STEP;
+
+  brightness = constrain(brightness, 0, 255);
+
+  display.setContrast(brightness);
+
+  static uint32_t tmr;
+
+  if (millis() - tmr >= BRIGHTNESS_DELAY) {
+    tmr = millis();
+    showBrightnessControl();
+  }
+}
+
+void showBrightnessControl() {
+  display.clearDisplay();
+
+  display.drawRect(0, 0, 128, 64, 1);
+
+  display.fillRect(32, 48, (brightness + 1) / 4, 8, 1);
+
+  display.drawRect(30, 46, 68, 12, 1);
+
+  display.drawCircle(64, 23, 10, 1);
+
+  display.drawBitmap(48, 7, brightness_bits, 33, 33, 1);
+
+  display.fillCircle(64, 23, 8, 1);
+
+  display.display();
+}
+
+void toDoList() {
+  mode = 1;
+}
+
+void showToDoList() {
 }
 
 void setTime() {
