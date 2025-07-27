@@ -1,3 +1,5 @@
+#define SH110X_NO_SPLASH
+
 #include <Arduino.h>
 #include <Bme280.h>
 #include <WiFi.h>
@@ -81,7 +83,7 @@ void show() {
   display.drawBitmap(5, 40, temperature_bits, 16, 16, 1);
 
   display.setTextSize(1);
-  display.setCursor(26, 46);
+  display.setCursor(getRIghtAlignedXPos(String(temperature), 26, 46, 37), 46);
   display.print(temperature);
 
   display.setCursor(32, 53);
@@ -89,7 +91,7 @@ void show() {
 
   display.drawBitmap(29, 49, square_bits, 2, 2, 1);
 
-  display.setCursor(72, 46);
+  display.setCursor(getRIghtAlignedXPos(String(humidity), 72, 46, 83), 46);
   display.print(humidity);
 
   display.setCursor(78, 53);
@@ -97,7 +99,7 @@ void show() {
 
   display.drawBitmap(48, 40, humidity_bits, 11, 16, 1);
 
-  display.setCursor(105, 46);
+  display.setCursor(getRIghtAlignedXPos(String(pressure), 105, 46, 122), 46);
   display.print(pressure);
 
   display.setCursor(111, 52);
@@ -106,7 +108,7 @@ void show() {
   display.drawBitmap(94, 40, pressure_bits, 9, 16, 1);
 
   display.setTextSize(2);
-  display.setCursor(79, 28);
+  display.setCursor(getRIghtAlignedXPos(String(year), 79, 28, 125), 28);
   display.print(year);
 
   display.drawBitmap(83, 5, paws_bits, 39, 10, 1);
@@ -121,4 +123,13 @@ void setTime() {
   }
 
   configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org");
+}
+
+int getRIghtAlignedXPos(const String &str, int x, int y, int rightXBound) {
+  int16_t x1, y1;
+  uint16_t w, h;
+
+  display.getTextBounds(str, x, y, &x1, &y1, &w, &h);
+
+  return rightXBound - w;
 }
