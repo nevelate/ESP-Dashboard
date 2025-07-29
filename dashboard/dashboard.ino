@@ -1,14 +1,19 @@
-#define SH110X_NO_SPLASH
-
 #include <Arduino.h>
+
 #include <EncButton.h>
-#include <Bme280.h>
+
 #include <WiFi.h>
 #include "ESPAsyncWebServer.h"
 #include <LittleFS.h>
 #include <FS.h>
+#include <ArduinoJson.h>
+#include <AsyncJson.h>
+#include <AsyncMessagePack.h>
+
 #include <time.h>
+
 #include <Wire.h>
+#include <Bme280.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <Fonts/Org_01.h>
@@ -19,23 +24,26 @@
 
 #define DASHBOARD_DELAY 15000
 #define BRIGHTNESS_STEP 16
-#define TO_DO_START_X 4
-#define TO_DO_START_Y 5
 #define TO_DO_OFFSET 15
 
 Bme280TwoWire sensor;
-Adafruit_SH1106G display = Adafruit_SH1106G(128, 64, &Wire);
 AsyncWebServer server(80);
+Adafruit_SH1106G display = Adafruit_SH1106G(128, 64, &Wire);
 Button btnUp(10, INPUT_PULLDOWN, HIGH);
 Button btnDown(8, INPUT_PULLDOWN, HIGH);
+MultiButton btnMulti;
 
 int temperature, pressure, humidity, year;
 String currentTime, currentDate;
 
 int8_t mode = 1;  // brightness -> dashboard -> to do list
+int8_t selectedTaskIndex, lowerBoundTaskIndex = 2;
 int brightness = 255;
 
 bool isWiFiDisabled = false;
+
+JsonDocument doc;
+JsonArray tasks;
 
 void setup() {
   Wire.begin(6, 7);
@@ -45,6 +53,8 @@ void setup() {
 
   if (!LittleFS.begin()) return;
 
+  //LittleFS.format();
+
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -52,15 +62,7 @@ void setup() {
 
   configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org");
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(LittleFS, "/index.html", "text/html");
-  });
-  server.on("/main.css", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(LittleFS, "/main.css", "text/css");
-  });
-  server.on("/main.js", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(LittleFS, "/main.js", "text/javascript");
-  });
+  configureServer();
   server.begin();
 
   display.begin(0x3C, false);
@@ -69,14 +71,23 @@ void setup() {
   display.clearDisplay();
 
   getDashboardData();
+
+  loadTasks();
 }
 
 void loop() {
-  btnUp.tick();
-  btnDown.tick();
+  btnMulti.tick(btnUp, btnDown);
 
-  if (btnUp.hold()) mode++;
-  else if (btnDown.hold()) mode--;
+  if (btnUp.hold()) {
+    if (mode == 2) {
+      tasks[selectedTaskIndex]["completed"] = !tasks[selectedTaskIndex]["completed"];
+      saveTasks();
+    } else {
+      mode++;
+    }
+  } else if (btnDown.hold()) mode--;
+
+  if (btnMulti.click()) changeWiFiState(); 
 
   if (mode < 0) mode = 2;
   else if (mode > 2) mode = 0;
@@ -213,47 +224,61 @@ void showBrightnessControl() {
 }
 
 void toDoList() {
+  if (btnUp.click()) selectedTaskIndex--;
+  else if (btnDown.click()) selectedTaskIndex++;
+
+  if (selectedTaskIndex < lowerBoundTaskIndex - 3) lowerBoundTaskIndex--;
+  selectedTaskIndex = constrain(selectedTaskIndex, 0, tasks.size() - 1);
+  if (selectedTaskIndex > lowerBoundTaskIndex) lowerBoundTaskIndex++;
+
   showToDoList();
 }
 
 void showToDoList() {
+  bool showTitle = lowerBoundTaskIndex < 3;
+
   display.clearDisplay();
 
   display.drawRect(0, 0, 128, 64, 1);
 
   display.setTextColor(1);
-  display.setTextSize(2);
   display.setTextWrap(false);
   display.setFont(&Org_01);
-  display.setCursor(11, 13);
-  display.print("To Do List");
+
+  if (showTitle) {
+    display.setTextSize(2);
+    display.setCursor(11, 13);
+    display.print("To Do List");
+  }
 
   display.setTextSize(1);
-  display.setCursor(14, 26);
-  display.print("Hiragana");
 
-  display.setCursor(14, 41);
-  display.print("LeetCode");
+  int startIndex = showTitle ? lowerBoundTaskIndex - 2 : lowerBoundTaskIndex - 3;
 
-  display.drawBitmap(6, 22, check_bits, 5, 5, 1);
+  for (int i = startIndex; i <= lowerBoundTaskIndex; i++) {
+    JsonVariant task = tasks[i];
+    int offset = showTitle ? (i + 1 - startIndex) * TO_DO_OFFSET : (i - startIndex) * TO_DO_OFFSET;
 
-  display.drawRect(4, 19, 120, 11, 1);
-
-  display.drawRect(4, 34, 120, 11, 1);
-
-  display.drawLine(12, 21, 12, 27, 1);
-
-  display.drawLine(12, 36, 12, 42, 1);
-
-  display.fillRect(4, 49, 120, 11, 1);
-
-  display.setTextColor(0);
-  display.setCursor(14, 56);
-  display.print("Zig");
-
-  display.drawLine(12, 51, 12, 57, 0);
-
-  display.drawBitmap(6, 52, check_bits, 5, 5, 0);
+    if (i == selectedTaskIndex) {
+      display.fillRect(4, 4 + offset, 120, 11, 1);
+      display.setTextColor(0);
+      display.setCursor(14, 11 + offset);
+      display.print(task["text"].as<String>());
+      if (task["completed"]) {
+        display.drawBitmap(6, 7 + offset, check_bits, 5, 5, 0);
+      }
+      display.drawLine(12, 6 + offset, 12, 12 + offset, 0);
+    } else {
+      display.drawRect(4, 4 + offset, 120, 11, 1);
+      display.setTextColor(1);
+      display.setCursor(14, 11 + offset);
+      display.print(task["text"].as<String>());
+      if (task["completed"]) {
+        display.drawBitmap(6, 7 + offset, check_bits, 5, 5, 1);
+      }
+      display.drawLine(12, 6 + offset, 12, 12 + offset, 1);
+    }
+  }
 
   display.display();
 }
@@ -265,4 +290,60 @@ int getRIghtAlignedXPos(const String &str, int x, int y, int rightXBound) {
   display.getTextBounds(str, x, y, &x1, &y1, &w, &h);
 
   return rightXBound - w;
+}
+
+void configureServer() {
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/index.html", "text/html");
+  });
+  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/style.css", "text/css");
+  });
+  server.on("/app.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/app.js", "text/javascript");
+  });
+
+  server.on("/tasks", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String content;
+    File file = LittleFS.open("/tasks.json", "r");
+    if (!file) content = "[]";
+    content = file.readString();
+    file.close();
+    request->send(200, "application/json", content);
+  });
+
+  AsyncCallbackJsonWebHandler *handler = new AsyncCallbackJsonWebHandler("/tasks", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    File file = LittleFS.open("/tasks.json", "w");
+    if (!file) {
+      request->send(500, "text/plain", "Could not open file");
+      return;
+    }
+    serializeJson(json, file);
+    file.close();
+    request->send(200, "text/plain", "Saved");
+  });
+
+  server.addHandler(handler);
+}
+
+bool saveTasks() {
+  File file = LittleFS.open("/tasks.json", "w");
+  if (!file) return false;
+  serializeJson(doc, file);
+  file.close();
+  return true;
+}
+
+void loadTasks() {
+  String content;
+  File file = LittleFS.open("/tasks.json", "r");
+  if (!file) content = "[]";
+  content = file.readString();
+  deserializeJson(doc, content);
+  file.close();
+  tasks = doc.as<JsonArray>();
+}
+
+void changeWiFiState(){
+
 }

@@ -3,48 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#062e3f">
-    <meta name="Description" content="A dynamic and aesthetic To-Do List WebApp.">
-
-    <!-- Google Font: Quick Sand -->
-    <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300&display=swap" rel="stylesheet">
-
-    <!-- font awesome (https://fontawesome.com) for basic icons; source: https://cdnjs.com/libraries/font-awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css" integrity="sha256-46r060N2LrChLLb5zowXQ72/iKKNiw/lAmygmHExk/o=" crossorigin="anonymous" />
-
-    <link rel="shortcut icon" type="image/png" href="assets/favicon.png"/>
-    <link rel="stylesheet" href="main.css">
-    <title>To do list</title>
-
+    <title>Todo List</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
 </head>
-
 <body>
-    <div id = "header">
-        <div class="flexrow-container">
-            <div class="standard-theme theme-selector"></div>
-            <div class="light-theme theme-selector"></div>
-            <div class="darker-theme theme-selector"></div>
-        </div>
-        <h1 id="title">Just do it.<div id="border"></div></h1>
-    </div>
-
-  <div id="form">
+    <h1>Todo List</h1>
+    <div class="wrapper">
         <form>
-            <input class="todo-input" type="text" placeholder="Task name">
-            <button class="todo-btn" type="submit">Add</button>
+            <input id="todo-input" type="text" 
+            placeholder="write anything and hit enter to add" autocomplete="off">
+            <button id="add-button">ADD</button>
         </form>
-    </div>    
-  <div id="myUnOrdList">
-        <ul class="todo-list">
-            <!-- (Basic Format)
-            <div class="todo">
-                items added to this list:
-                <li></li>
-                <button>delete</button>
-                <button>check</button>
-            </div> -->
+        <ul id="todo-list">
+            <!-- <li class="todo">
+                <input type="checkbox" id="todo-1">
+                <label class="custom-checkbox" for="todo-1">
+                    <svg fill="transparent" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24">
+                        <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                    </svg>
+                </label>
+                <label for="todo-1" class="todo-text">
+                    webdev project with html, css and js
+                </label>
+                <button class="delete-button">
+                    <svg fill="var(--secondary-color)" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24">
+                        <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/>
+                    </svg>
+                </button>
+            </li>
+            <li class="todo">
+                <input type="checkbox" id="todo-2">
+                <label class="custom-checkbox" for="todo-2">
+                    <svg fill="transparent" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24">
+                        <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+                    </svg>
+                </label>
+                <label for="todo-2" class="todo-text">
+                    webdev project with html, css and js
+                </label>
+                <button class="delete-button">
+                    <svg fill="var(--secondary-color)" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24">
+                        <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/>
+                    </svg>
+                </button>
+            </li> -->
         </ul>
     </div>
-    <script src="main.js" type="text/javascript"> </script>
 </body>
 </html>
