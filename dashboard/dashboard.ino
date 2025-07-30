@@ -22,10 +22,6 @@
 #include "StringHelpers.h"
 #include "constants.h"
 
-#define DASHBOARD_DELAY 15000
-#define BRIGHTNESS_STEP 16
-#define TO_DO_OFFSET 15
-
 Bme280TwoWire sensor;
 AsyncWebServer server(80);
 Adafruit_SH1106G display = Adafruit_SH1106G(128, 64, &Wire);
@@ -40,10 +36,10 @@ int8_t mode = 1;  // brightness -> dashboard -> to do list
 int8_t selectedTaskIndex, lowerBoundTaskIndex = 2;
 int brightness = 255;
 
-bool isWiFiDisabled = false;
-
 JsonDocument doc;
 JsonArray tasks;
+
+bool isWiFiConnected = true;
 
 void setup() {
   Wire.begin(6, 7);
@@ -62,9 +58,6 @@ void setup() {
 
   configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org");
 
-  configureServer();
-  server.begin();
-
   display.begin(0x3C, false);
   display.display();
   delay(2000);
@@ -78,16 +71,10 @@ void setup() {
 void loop() {
   btnMulti.tick(btnUp, btnDown);
 
-  if (btnUp.hold()) {
-    if (mode == 2) {
-      tasks[selectedTaskIndex]["completed"] = !tasks[selectedTaskIndex]["completed"];
-      saveTasks();
-    } else {
-      mode++;
-    }
-  } else if (btnDown.hold()) mode--;
+  if (btnUp.hold()) mode++;
+  else if (btnDown.hold()) mode--;
 
-  if (btnMulti.click()) changeWiFiState(); 
+  if (btnMulti.hold()) changeServerState();
 
   if (mode < 0) mode = 2;
   else if (mode > 2) mode = 0;
@@ -189,9 +176,9 @@ void brightnessControl() {
 void getDashboardData() {
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)) {
-    if (!isWiFiDisabled) {
-      //WiFi.disconnect(true);
-      isWiFiDisabled = true;
+    if (isWiFiConnected) {
+      WiFi.disconnect(true);
+      isWiFiConnected = false;
     }
 
     currentTime = pad2(timeinfo.tm_hour) + ":" + pad2(timeinfo.tm_min);
@@ -226,6 +213,11 @@ void showBrightnessControl() {
 void toDoList() {
   if (btnUp.click()) selectedTaskIndex--;
   else if (btnDown.click()) selectedTaskIndex++;
+
+  if (btnMulti.click()) {
+    tasks[selectedTaskIndex]["completed"] = !tasks[selectedTaskIndex]["completed"];
+    saveTasks();
+  }
 
   if (selectedTaskIndex < lowerBoundTaskIndex - 3) lowerBoundTaskIndex--;
   selectedTaskIndex = constrain(selectedTaskIndex, 0, tasks.size() - 1);
@@ -292,6 +284,15 @@ int getRIghtAlignedXPos(const String &str, int x, int y, int rightXBound) {
   return rightXBound - w;
 }
 
+int getCenterAlignedXPos(const String &str) {
+  int16_t x1, y1;
+  uint16_t w, h;
+
+  display.getTextBounds(str, 0, 0, &x1, &y1, &w, &h);
+
+  return (display.width() - w) / 2;
+}
+
 void configureServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(LittleFS, "/index.html", "text/html");
@@ -344,6 +345,54 @@ void loadTasks() {
   tasks = doc.as<JsonArray>();
 }
 
-void changeWiFiState(){
+void changeServerState() {
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.begin(ssid, password);
 
+    display.clearDisplay();
+
+    display.drawRect(0, 0, 128, 64, 1);
+
+    display.drawBitmap(37, 10, wifi_bits, 52, 31, 1);
+
+    display.display();
+
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+    }
+
+    display.setTextColor(1);
+    display.setTextSize(2);
+    display.setTextWrap(false);
+    display.setFont(&Org_01);
+    display.setCursor(getCenterAlignedXPos(WiFi.localIP().toString()), 56);
+    display.print(WiFi.localIP());
+
+    display.display();
+
+    configureServer();
+    server.begin();
+    delay(3000);
+  } else {
+    server.end();
+    WiFi.disconnect(true);
+    loadTasks();
+
+    display.clearDisplay();
+
+    display.drawRect(0, 0, 128, 64, 1);
+
+    display.drawBitmap(37, 10, wifi_bits, 52, 31, 1);
+
+    display.setTextColor(1);
+    display.setTextSize(2);
+    display.setTextWrap(false);
+    display.setFont(&Org_01);
+    display.setCursor(getCenterAlignedXPos("Wifi off"), 56);
+    display.print("Wifi off");
+
+    display.display();
+
+    delay(2000);
+  }
 }
